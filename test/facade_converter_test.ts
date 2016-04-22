@@ -443,4 +443,20 @@ var y = X.get({"a": 1}, "a");`);
       expectWithTypes('["a", "b"].map((x) => x);').to.equal('["a", "b"].map((x) => x).toList();');
     });
   });
+  describe('type aliases', () => {
+    it('are used for named params', () => {
+      expectWithTypes('type NamedArgs = {x?: string}; function f({x = null}: NamedArgs = {}) {}')
+          .to.equal(`f({String x: null}) {}`);
+    });
+    it('are used for function typedefs', () => {
+      expectWithTypes('type Func = <T>(x: T) => T; function crunch<T>(f: Func<T>) {}')
+          .to.equal(`typedef T Func<T>(T x);
+crunch/*< T >*/(Func<dynamic/*= T */ > f) {}`);
+    });
+    it('are otherwise inlined', () => {
+      expectWithTypes('type StringMap = {[key: string]: number}; function f(m: StringMap) {}')
+          .to.equal(`f(Map<String, num> m) {}`);
+      expectWithTypes('type X = {x: number}; function f(x: X) {}').to.equal(`f(dynamic x) {}`);
+    });
+  });
 });

@@ -158,6 +158,35 @@ export class FacadeConverter extends base.TranspilerBase {
     return symbol.declarations.some(d => d.parent.kind === ts.SyntaxKind.FunctionDeclaration);
   }
 
+  // Returns `[K, V]` for types like `{[key: K]: V}`, `undefined` otherwise.
+  private extractMapParams(t: ts.Type): [ts.TypeNode, ts.TypeNode] {
+    if (!t.symbol) return;
+
+    let decls = t.symbol.declarations;
+    if (decls.length !== 1) return;
+    let [decl] = decls;
+    if (decl.kind !== ts.SyntaxKind.TypeLiteral) return;
+
+    let members = (<ts.TypeLiteralNode>decl).members;
+    if (members.length !== 1) return;
+    let [member] = members;
+    if (member.kind !== ts.SyntaxKind.IndexSignature) return;
+
+    let sig = <ts.IndexSignatureDeclaration>member;
+    let params = sig.parameters;
+    if (params.length !== 1) return;
+    let [param] = params;
+
+    return [param.type, sig.type];
+  }
+
+  // Whether `t` is a simple function type (e.g. `(x: number) => boolean`).
+  private isFunctionType(t: ts.Type): boolean {
+    return (t.flags & ts.TypeFlags.Anonymous) &&
+        (<ts.InterfaceType>t).getProperties().length === 0 &&
+        (<ts.InterfaceType>t).getCallSignatures().length === 1;
+  }
+
   visitTypeName(typeName: ts.EntityName) {
     if (typeName.kind !== ts.SyntaxKind.Identifier) {
       this.visit(typeName);
@@ -173,18 +202,38 @@ export class FacadeConverter extends base.TranspilerBase {
       return;
     }
 
-    if (this.candidateTypes.hasOwnProperty(ident) && this.tc) {
+    if (this.tc) {
       let symbol = this.tc.getSymbolAtLocation(typeName);
-      if (!symbol) {
-        this.reportMissingType(typeName, ident);
-        return;
-      }
-      let fileAndName = this.getFileAndName(typeName, symbol);
-      if (fileAndName) {
-        let fileSubs = this.TS_TO_DART_TYPENAMES[fileAndName.fileName];
-        if (fileSubs && fileSubs.hasOwnProperty(fileAndName.qname)) {
-          this.emit(fileSubs[fileAndName.qname]);
+      if (this.candidateTypes.hasOwnProperty(ident)) {
+        if (!symbol) {
+          this.reportMissingType(typeName, ident);
           return;
+        }
+        let fileAndName = this.getFileAndName(typeName, symbol);
+        if (fileAndName) {
+          let fileSubs = this.TS_TO_DART_TYPENAMES[fileAndName.fileName];
+          if (fileSubs && fileSubs.hasOwnProperty(fileAndName.qname)) {
+            this.emit(fileSubs[fileAndName.qname]);
+            return;
+          }
+        }
+      }
+      if (symbol && (symbol.flags & ts.SymbolFlags.TypeAlias)) {
+        let t = this.tc.getTypeAtLocation(typeName);
+        if (t) {
+          let mapParams = this.extractMapParams(t);
+          if (mapParams) {
+            let [keyType, valueType] = mapParams;
+            this.emit('Map<');
+            this.visit(keyType);
+            this.emit(',');
+            this.visit(valueType);
+            this.emit('>');
+            return;
+          } else if (!this.isFunctionType(t)) {
+            this.emit('dynamic');
+            return;
+          }
         }
       }
     }

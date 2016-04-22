@@ -111,6 +111,9 @@ export default class DeclarationTranspiler extends base.TranspilerBase {
       case ts.SyntaxKind.SemicolonClassElement:
         // No-op, don't emit useless declarations.
         break;
+      case ts.SyntaxKind.TypeAliasDeclaration:
+        this.visitTypeAliasDeclaration(<ts.TypeAliasDeclaration>node);
+        break;
       case ts.SyntaxKind.MethodDeclaration:
         this.visitDeclarationMetadata(<ts.MethodDeclaration>node);
         this.visitFunctionLike(<ts.MethodDeclaration>node);
@@ -363,6 +366,17 @@ export default class DeclarationTranspiler extends base.TranspilerBase {
     this.emit(';');
   }
 
+  private visitTypeAliasDeclaration(decl: ts.TypeAliasDeclaration) {
+    // TODO(ochafik): Issue error when typechecks are off (type aliases require
+    // typechecking).
+
+    // Only emit function typedefs.
+    if (decl.type.kind === ts.SyntaxKind.FunctionType) {
+      let t = <ts.FunctionTypeNode>decl.type;
+      this.visitFunctionTypedefInterface(decl.name.text, t, t.typeParameters);
+    }
+  }
+
   private visitClassLike(keyword: string, decl: base.ClassLike) {
     this.visitDecorators(decl.decorators);
     this.emit(keyword);
@@ -493,7 +507,7 @@ export default class DeclarationTranspiler extends base.TranspilerBase {
    * call signature, by translating to a Dart `typedef`.
    */
   private visitFunctionTypedefInterface(
-      name: string, signature: ts.CallSignatureDeclaration,
+      name: string, signature: ts.SignatureDeclaration,
       typeParameters: ts.NodeArray<ts.TypeParameterDeclaration>) {
     this.emit('typedef');
     if (signature.type) {
