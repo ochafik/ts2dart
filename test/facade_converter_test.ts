@@ -444,3 +444,8 @@ var y = X.get({"a": 1}, "a");`);
     });
   });
 });
+describe('type-unaware translation', () => {
+  it('finds named param types in literal', () => {
+    expectTranslate('function f({x}: {x?: string} = {}) {}').to.equal(`f({String x}) {}`);
+  });
+});

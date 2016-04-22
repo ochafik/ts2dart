@@ -117,8 +117,15 @@ export class FacadeConverter extends base.TranspilerBase {
     this.genericMethodDeclDepth--;
   }
 
-  resolvePropertyTypes(tn: ts.TypeNode): ts.Map<ts.PropertyDeclaration> {
-    let res: ts.Map<ts.PropertyDeclaration> = {};
+  resolvePropertyTypes(tn: ts.TypeNode): ts.Map<ts.PropertyDeclaration|ts.PropertySignature> {
+    let res: ts.Map<ts.PropertyDeclaration|ts.PropertySignature> = {};
+    if (tn && tn.kind === ts.SyntaxKind.TypeLiteral) {
+      for (let m of (<ts.TypeLiteralNode>tn).members) {
+        if (m.kind === ts.SyntaxKind.PropertySignature) {
+          res[m.name.getText()] = <ts.PropertySignature>m;
+        }
+      }
+    }
     if (!tn || !this.tc) return res;
 
     let t = this.tc.getTypeAtLocation(tn);
